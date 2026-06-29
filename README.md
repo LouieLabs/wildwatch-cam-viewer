@@ -4,8 +4,8 @@ Starter app for the WildWatch camera viewer section of louielabs.com. Built with
 **Vite + React + Tailwind**. Your job is to design and build the gallery; auth
 and the data API are wired for you.
 
-> Read the full build guide first: [`docs/wildwatch-student-guide.md`](../Wildlife-cam/docs/wildwatch-student-guide.md)
-> (in the `Wildlife-cam` repo).
+> Read the full build guide first: [WildWatch Student Build Guide](https://github.com/LouieLabs/Wildlife-cam/blob/main/docs/wildwatch-student-guide.md)
+> (lives in the `Wildlife-cam` repo).
 
 ---
 

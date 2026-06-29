@@ -11,5 +11,5 @@ Build at minimum:
 
 Wire them into `src/App.jsx` (replace the stub inside `<main>`).
 
-See [`docs/wildwatch-student-guide.md`](../../../docs/wildwatch-student-guide.md)
+See the [WildWatch Student Build Guide](https://github.com/LouieLabs/Wildlife-cam/blob/main/docs/wildwatch-student-guide.md):
 §04 for the `CaptureCard` data shape and §07 for the Claude prompt.
