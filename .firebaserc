@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "louielabs-animal-cams"
+  },
+  "targets": {
+    "louielabs-animal-cams": {
+      "hosting": {
+        "wildwatch-cam-viewer": ["wildwatch-cam-viewer"]
+      }
+    }
+  }
+}
