@@ -8,8 +8,7 @@ on:
 permissions:
   contents: read
   id-token: write       # required for Workload Identity Federation
-  checks: write
-  pull-requests: write
+  pull-requests: write  # required to post the preview URL as a PR comment
 
 jobs:
   build_and_preview:
@@ -32,11 +31,65 @@ jobs:
           VITE_FIREBASE_AUTH_DOMAIN: louielabs-animal-cams.firebaseapp.com
           VITE_FIREBASE_PROJECT_ID: louielabs-animal-cams
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+
+      - name: Deploy preview channel
+        id: preview
+        run: |
+          # Channel ID = PR number when triggered by a PR, branch name otherwise.
+          # Sanitize for Firebase's channel-id rules (alphanumeric + dash, <=63 chars).
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANNEL_ID="pr-${{ github.event.number }}"
+          else
+            CHANNEL_ID="${{ github.ref_name }}"
+          fi
+          CHANNEL_ID=$(echo "$CHANNEL_ID" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | cut -c1-63)
+          echo "Channel: $CHANNEL_ID"
+
+          OUTPUT=$(npx --yes firebase-tools@13 hosting:channel:deploy "$CHANNEL_ID" \
+            --only wildwatch-cam-viewer \
+            --expires 30d \
+            --project louielabs-animal-cams \
+            --non-interactive \
+            --json)
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | jq -r '.result["wildwatch-cam-viewer"].url')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL_ID" >> "$GITHUB_OUTPUT"
+          echo "Preview URL: $URL"
+
+      - name: Comment preview URL on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          projectId: louielabs-animal-cams
-          target: wildwatch-cam-viewer
-          expires: 30d
-          # No firebaseServiceAccount — the action picks up the ambient ADC
-          # set by google-github-actions/auth above.
+          script: |
+            const url = '${{ steps.preview.outputs.url }}';
+            const channel = '${{ steps.preview.outputs.channel }}';
+            const body =
+              `WildWatch preview (channel \`${channel}\`):\n` +
+              `${url}\n` +
+              `_Expires in 30 days. Re-deploys on every push to this branch._`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const existing = comments.find(
+              (c) => c.user.type === 'Bot' && c.body.includes('WildWatch preview')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                comment_id: existing.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            }
