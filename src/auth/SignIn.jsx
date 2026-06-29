@@ -18,11 +18,16 @@ export function SignInButton() {
     );
   }
   return (
-    <button
-      onClick={signInWithGoogle}
-      className="px-4 py-2 rounded bg-emerald-700 text-white hover:bg-emerald-800"
-    >
-      Sign in with Google
-    </button>
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={signInWithGoogle}
+        className="px-4 py-2 rounded bg-emerald-700 text-white hover:bg-emerald-800"
+      >
+        Sign in with Louie Labs
+      </button>
+      <span className="text-xs text-stone-500">
+        Use your @louielabs.com account
+      </span>
+    </div>
   );
 }
