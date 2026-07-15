@@ -1,50 +1,54 @@
-import { useEffect, useState } from "react";
-import { AuthProvider, useAuth } from "./auth/AuthProvider.jsx";
-import { SignInButton } from "./auth/SignIn.jsx";
-import { fetchCaptures } from "./api/fetchCaptures.js";
-
-function GalleryShell() {
-  const { user, loading: authLoading } = useAuth();
-  const [captures, setCaptures] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (authLoading) return;
-    setLoading(true);
-    fetchCaptures({ publicOnly: !user, limit: 50 })
-      .then(setCaptures)
-      .finally(() => setLoading(false));
-  }, [user, authLoading]);
-
-  return (
-    <div className="min-h-screen bg-stone-50 text-stone-900">
-      <header className="px-6 py-4 flex items-center justify-between border-b border-stone-200">
-        <div>
-          <h1 className="text-2xl font-semibold text-emerald-800">WildWatch</h1>
-          <p className="text-sm text-stone-500">Live from the backyard cameras.</p>
-        </div>
-        <SignInButton />
-      </header>
-      <main className="p-6">
-        {/*
-          STUDENT WORK STARTS HERE.
-          Replace the stub below with your <FilterBar />, <GalleryGrid />,
-          and <Lightbox /> components. See docs/wildwatch-student-guide.md.
-        */}
-        <p className="text-stone-600">
-          {loading
-            ? "Loading captures…"
-            : `${captures.length} captures loaded. Build your gallery in src/components/.`}
-        </p>
-      </main>
-    </div>
-  );
-}
+import { useCallback, useState } from 'react'
+import { useAuth } from './hooks/useAuth'
+import { useCaptures } from './hooks/useCaptures'
+import { signIn, signOut } from './lib/firebase'
+import { API_BASE } from './lib/api'
+import { notifyDetections } from './lib/notifications'
+import { useToast } from './context/ToastContext'
+import AppShell from './components/AppShell'
+import LibraryPage from './components/LibraryPage'
+import LivePage from './components/LivePage'
+import ActivityPage from './components/ActivityPage'
+import SettingsPage from './components/SettingsPage'
 
 export default function App() {
+  const { user, ready } = useAuth()
+  const [page, setPage] = useState('home')
+  const toast = useToast()
+
+  // Fire browser notifications for genuinely-new detections; clicking one jumps
+  // to that photo in the Library.
+  const onFresh = useCallback((freshPhotos) => {
+    notifyDetections(freshPhotos, (id) => {
+      setPage('library')
+      window.location.hash = '#photo=' + encodeURIComponent(id)
+    })
+  }, [])
+
+  const captures = useCaptures({ user, ready, onFresh })
+
+  const onAuth = () => {
+    if (user) {
+      if (window.confirm('Sign out of ' + (user.email || 'this account') + '?')) {
+        signOut().catch((e) => toast('Sign-out failed: ' + e.message))
+      }
+    } else {
+      signIn().catch((e) => toast('Sign-in failed: ' + e.message))
+    }
+  }
+
+  const onAddCamera = () => window.open(API_BASE + '/provision', '_blank')
+
   return (
-    <AuthProvider>
-      <GalleryShell />
-    </AuthProvider>
-  );
+    <AppShell page={page} onNavigate={setPage} user={user} onAuth={onAuth} onAddCamera={onAddCamera}>
+      {(page === 'home' || page === 'library') && (
+        <LibraryPage key={page} mode={page} captures={captures} signedIn={!!user} onNavigate={setPage} onAddCamera={onAddCamera} />
+      )}
+      {page === 'live' && <LivePage captures={captures} user={user} signedIn={!!user} />}
+      {page === 'activity' && <ActivityPage captures={captures} />}
+      {page === 'settings' && (
+        <SettingsPage captures={captures} user={user} signedIn={!!user} onAuth={onAuth} onAddCamera={onAddCamera} />
+      )}
+    </AppShell>
+  )
 }

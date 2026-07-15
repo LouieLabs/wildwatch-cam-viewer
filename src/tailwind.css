@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom utilities used by the lifted Stitch markup. */
+@layer components {
+  /* Live page bento grid: 4 columns, the hero tile spans 2×2. */
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+  @media (max-width: 1024px) {
+    .bento-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 640px) {
+    .bento-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .glass-dark {
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer utilities {
+  .live-pulse {
+    animation: live-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes live-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+  .pulse-notification {
+    animation: notif-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes notif-pulse {
+    0%,
+    100% {
+      box-shadow: 0 8px 20px rgba(21, 51, 32, 0.18);
+    }
+    50% {
+      box-shadow: 0 8px 30px rgba(21, 51, 32, 0.35);
+    }
+  }
+}
