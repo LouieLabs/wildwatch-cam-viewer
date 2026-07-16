@@ -6,6 +6,10 @@ and the data API are wired for you.
 
 > Read the full build guide first: **[`docs/wildwatch-student-guide.md`](docs/wildwatch-student-guide.md)**.
 
+> **Note:** the viewer has since been rebuilt as a full React implementation — see
+> [`README.rebuild.md`](README.rebuild.md) for the current app, and
+> [`docs/design-workflow.md`](docs/design-workflow.md) to make visual changes via Stitch.
+
 ---
 
 ## Quick start
