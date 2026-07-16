@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchCaptures, PAGE_SIZE, kickAnalysis } from '../lib/api'
-import { mapCaptureToPhoto } from '../lib/photos'
+import { mapCaptureToPhoto, isDetection } from '../lib/photos'
 
 // ── CAPTURES ENGINE ───────────────────────────────────────────────────────────
 // Owns the full photo list, paging, the 60s auto-refresh, and "N new photos"
@@ -39,11 +39,16 @@ export function useCaptures({ user, ready, onFresh }) {
       const wasEmpty = photosRef.current.length === 0
       if (!wasEmpty) {
         const known = new Set(photosRef.current.map((p) => p.id))
-        const freshCards = cards.filter((c) => c.id && !known.has(c.id))
-        if (freshCards.length > 0) {
-          setNewCount((n) => n + freshCards.length)
-          // Hand the new arrivals to the notifier (mapped to photo objects).
-          onFreshRef.current?.(freshCards.map(mapCaptureToPhoto).filter((p) => p.src))
+        const freshPhotos = cards
+          .filter((c) => c.id && !known.has(c.id))
+          .map(mapCaptureToPhoto)
+          .filter((p) => p.src)
+        // Only count/announce photos this viewer can actually see: signed-out
+        // (non-Louie-Labs) visitors see animals only.
+        const freshVisible = signedIn ? freshPhotos : freshPhotos.filter(isDetection)
+        if (freshVisible.length > 0) {
+          setNewCount((n) => n + freshVisible.length)
+          onFreshRef.current?.(freshVisible)
         }
       }
       merge(cards)
