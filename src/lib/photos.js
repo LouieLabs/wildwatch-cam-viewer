@@ -119,12 +119,42 @@ export function isDetection(p) {
 }
 
 // ── ROTATION ──────────────────────────────────────────────────────────────────
-// The rotation every viewer sees comes from the server (p.rotation). Anonymous
-// viewers can still rotate for themselves; that override lives in localStorage
-// and wins on this device.
+// Precedence for the angle a photo is shown at (this device):
+//   1. an explicit per-photo rotation (localStorage or, when signed in, server)
+//   2. a per-camera "rotation lock" — a default applied to every photo from that
+//      camera taken at/after the moment the lock was set (covers future uploads)
+//   3. the server's saved rotation
+const norm = (deg) => (((Number(deg) || 0) % 360) + 360) % 360
+
+// Per-camera rotation lock: { deg, since } in localStorage, keyed by camera id.
+// "since" is the timestamp of the photo the lock was set from, so the default
+// only applies from that photo forward.
+export function getCamRotLock(cameraId) {
+  try {
+    const raw = localStorage.getItem('wildwatch.camrot.' + cameraId)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+export function setCamRotLock(cameraId, deg, since) {
+  localStorage.setItem('wildwatch.camrot.' + cameraId, JSON.stringify({ deg: norm(deg), since }))
+}
+export function clearCamRotLock(cameraId) {
+  localStorage.removeItem('wildwatch.camrot.' + cameraId)
+}
+// True when this camera's lock covers this specific photo.
+export function camLockApplies(p) {
+  const lock = getCamRotLock(p.cameraId)
+  return !!(lock && p.date && p.date.getTime() >= lock.since)
+}
+
 export function effRot(p) {
   const local = localStorage.getItem('wildwatch.rot.' + p.id)
-  return local !== null ? ((Number(local) % 360) + 360) % 360 : p.rotation || 0
+  if (local !== null) return norm(local)
+  const lock = getCamRotLock(p.cameraId)
+  if (lock && p.date && p.date.getTime() >= lock.since) return norm(lock.deg)
+  return norm(p.rotation)
 }
 
 // Rotate an <img> and its detection-overlay canvas together. Quarter turns get
