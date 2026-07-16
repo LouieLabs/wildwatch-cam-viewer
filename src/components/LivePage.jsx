@@ -149,8 +149,8 @@ function HeroTile({ cam, onOpen }) {
             </span>
             <h3 className="font-headline-md text-headline-md">{cam.name}</h3>
           </div>
-          <button className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3 rounded-full transition-colors">
-            <Icon name="fullscreen" />
+          <button className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3 rounded-full transition-colors flex items-center justify-center leading-none">
+            <Icon name="fullscreen" className="leading-none block" />
           </button>
         </div>
       </div>
