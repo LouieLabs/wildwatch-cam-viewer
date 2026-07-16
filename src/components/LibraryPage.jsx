@@ -267,29 +267,29 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
         </div>
       )}
 
-      {/* View Complete History / Load older */}
+      {/* Home → jump to the full Library; Library → page in older photos. */}
       <div className="flex justify-center mt-12 mb-4">
-        {hasMore && displayed.length > 0 ? (
-          <button
-            className="px-8 py-3 border border-outline rounded-lg text-primary font-button-text text-button-text hover:bg-surface-container transition-all flex items-center gap-2 group disabled:opacity-50"
-            disabled={loadingMore}
-            onClick={() => loadMore().catch(() => toast('Could not load older photos — try again'))}
-          >
-            {loadingMore ? 'Loading…' : 'View Complete History'}
-            <Icon name="arrow_forward" className="group-hover:translate-x-1 transition-transform" />
-          </button>
-        ) : (
-          mode === 'home' &&
-          displayed.length > 0 && (
-            <button
-              className="px-8 py-3 border border-outline rounded-lg text-primary font-button-text text-button-text hover:bg-surface-container transition-all flex items-center gap-2 group"
-              onClick={() => onNavigate('library')}
-            >
-              Browse the full Library
-              <Icon name="arrow_forward" className="group-hover:translate-x-1 transition-transform" />
-            </button>
-          )
-        )}
+        {mode === 'home'
+          ? displayed.length > 0 && (
+              <button
+                className="px-8 py-3 border border-outline rounded-lg text-primary font-button-text text-button-text hover:bg-surface-container transition-all flex items-center gap-2 group"
+                onClick={() => onNavigate('library')}
+              >
+                View all photos in Library
+                <Icon name="arrow_forward" className="group-hover:translate-x-1 transition-transform" />
+              </button>
+            )
+          : hasMore &&
+            displayed.length > 0 && (
+              <button
+                className="px-8 py-3 border border-outline rounded-lg text-primary font-button-text text-button-text hover:bg-surface-container transition-all flex items-center gap-2 group disabled:opacity-50"
+                disabled={loadingMore}
+                onClick={() => loadMore().catch(() => toast('Could not load older photos — try again'))}
+              >
+                {loadingMore ? 'Loading…' : 'Load more photos'}
+                {!loadingMore && <Icon name="expand_more" className="group-hover:translate-y-0.5 transition-transform" />}
+              </button>
+            )}
       </div>
 
       {/* Floating action button */}
