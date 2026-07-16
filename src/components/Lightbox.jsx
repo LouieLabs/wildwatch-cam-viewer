@@ -6,6 +6,9 @@ import {
   groupOf,
   chronoStep,
   groupFaceIndex,
+  getCamRotLock,
+  setCamRotLock,
+  clearCamRotLock,
 } from '../lib/photos'
 import { patchRotation, patchCapture } from '../lib/api'
 import { useToast } from '../context/ToastContext'
@@ -182,7 +185,26 @@ export default function Lightbox({
     )
   }
 
+  // Make this photo's rotation the default for every later shot from this camera
+  // (this device). Uses the photo's timestamp so only following images inherit it.
+  const lockRotation = () => {
+    if (!p) return
+    const deg = effRot(p)
+    setCamRotLock(p.cameraId, deg, p.date.getTime())
+    toast(deg ? `Following ${p.camera} photos will auto-rotate ${deg}°` : `Following ${p.camera} photos set upright`)
+    setRedraw((n) => n + 1)
+    onBumpRot?.()
+  }
+  const unlockRotation = () => {
+    if (!p) return
+    clearCamRotLock(p.cameraId)
+    toast(`Rotation lock removed for ${p.camera}`)
+    setRedraw((n) => n + 1)
+    onBumpRot?.()
+  }
+
   if (!p) return null
+  const camLock = getCamRotLock(p.cameraId)
 
   return (
     <div
@@ -258,6 +280,31 @@ export default function Lightbox({
           <button className="btn-secondary" style={{ width: '100%' }} onClick={rotate}>
             ⟳ Rotate 90°
           </button>
+          {/* Rotation lock is a curation tool — signed-in Louie Labs users only. */}
+          {signedIn && (
+            <>
+              <button
+                className="btn-secondary"
+                style={{ width: '100%' }}
+                onClick={lockRotation}
+                title="Use this photo's rotation as the default for every later photo from this camera (this device)."
+              >
+                🔒 Lock rotation for following images
+              </button>
+              {camLock && (
+                <div style={{ fontSize: 11, color: 'var(--text-2)', textAlign: 'center', lineHeight: 1.4, marginTop: -4 }}>
+                  {p.camera} photos from{' '}
+                  {new Date(camLock.since).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} on auto-rotate {camLock.deg}°.{' '}
+                  <button
+                    onClick={unlockRotation}
+                    style={{ background: 'none', border: 'none', color: 'var(--green)', cursor: 'pointer', textDecoration: 'underline', padding: 0, font: 'inherit' }}
+                  >
+                    Unlock
+                  </button>
+                </div>
+              )}
+            </>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn-secondary" style={{ flex: 1 }} onClick={download}>
               ⬇ Download
