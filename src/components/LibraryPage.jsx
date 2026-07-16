@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { computeGroups, groupFaceIndex, isDetection, colorFor } from '../lib/photos'
+import { computeGroups, groupFaceIndex, colorFor } from '../lib/photos'
 import { useToast } from '../context/ToastContext'
 import { Icon } from './AppShell'
 import PhotoCard from './PhotoCard'
 import Lightbox from './Lightbox'
 
-// Home (mode="home", detections only) and Library (mode="library", everything),
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// Home (mode="home", last 24 hours) and Library (mode="library", full archive),
 // laid out to match the Stitch "Detections" mockup.
 export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAddCamera }) {
   const { photos, hasMore, loadingMore, loadMore, newCount, dismissNew, error, patchPhoto } =
@@ -34,7 +36,8 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
   }, [photos])
 
   const displayed = useMemo(() => {
-    const base = mode === 'home' ? photos.filter(isDetection) : photos
+    // Home = every event from the last 24 hours; Library = the full archive.
+    const base = mode === 'home' ? photos.filter((p) => Date.now() - p.date.getTime() <= DAY_MS) : photos
     const sorted = [...base]
     if (sortMode === 'newest') sorted.sort((a, b) => b.date - a.date)
     else if (sortMode === 'oldest') sorted.sort((a, b) => a.date - b.date)
@@ -63,7 +66,16 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
 
   const groups = useMemo(() => computeGroups(displayed), [displayed])
 
-  const title = mode === 'home' ? 'Detections' : 'Photo Library'
+  // Home shows the FULL last-24h window, but the API only returns 100 photos per
+  // page — so keep paging in older photos until the oldest loaded capture is
+  // past 24h (or there's no more history). Runs again as each page merges in.
+  useEffect(() => {
+    if (mode !== 'home' || loadingMore || !hasMore || !photos.length) return
+    const oldestLoaded = photos[photos.length - 1].date.getTime() // list is newest-first
+    if (oldestLoaded > Date.now() - DAY_MS) loadMore().catch(() => {})
+  }, [mode, photos, hasMore, loadingMore, loadMore])
+
+  const title = mode === 'home' ? 'Last 24 Hours' : 'Photo Library'
   const countText =
     groups.length === displayed.length
       ? `${displayed.length} photo${displayed.length !== 1 ? 's' : ''}`
@@ -138,7 +150,11 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
         <div>
           <h2 className="font-headline-lg text-headline-lg text-primary mb-1">{title}</h2>
           <p className="text-text-secondary font-body-md">
-            {error ? 'could not load photos — retrying…' : `${countText} · AI-named as detections come in`}
+            {error
+              ? 'could not load photos — retrying…'
+              : mode === 'home'
+                ? `${countText}${loadingMore ? ' · loading earlier…' : ' · everything older is in the Library'}`
+                : countText}
           </p>
         </div>
         {topSpecies.length > 0 && (
@@ -239,11 +255,11 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
         <div className="flex flex-col items-center justify-center py-24 text-text-secondary">
           <Icon name="search_off" size="40px" className="mb-2" />
           <h3 className="font-headline-md text-headline-md text-on-surface mb-1">
-            {mode === 'home' ? 'No detections yet' : 'No photos found'}
+            {mode === 'home' ? 'Nothing in the last 24 hours' : 'No photos found'}
           </h3>
           <p className="font-body-md">
             {mode === 'home'
-              ? 'When the AI spots an animal in a photo, it shows up here.'
+              ? 'New captures from the last day show up here. Browse the full archive in the Library.'
               : 'Try adjusting your filters or search terms.'}
           </p>
         </div>
