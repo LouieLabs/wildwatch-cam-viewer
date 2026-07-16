@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { computeGroups, groupFaceIndex, colorFor } from '../lib/photos'
+import { computeGroups, groupFaceIndex, colorFor, isDetection } from '../lib/photos'
 import { useToast } from '../context/ToastContext'
 import { Icon } from './AppShell'
 import PhotoCard from './PhotoCard'
@@ -25,19 +25,23 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
   const [rotVersion, setRotVersion] = useState(0)
   const deepLinkDone = useRef(false)
 
-  const animalOptions = useMemo(() => [...new Set(photos.map((p) => p.animal))].sort(), [photos])
-  const cameraOptions = useMemo(() => [...new Set(photos.map((p) => p.camera))].sort(), [photos])
+  // What this viewer may see: signed-out (non-Louie-Labs) visitors get animals
+  // only; signed-in Louie Labs users get everything.
+  const visible = useMemo(() => (signedIn ? photos : photos.filter(isDetection)), [photos, signedIn])
+
+  const animalOptions = useMemo(() => [...new Set(visible.map((p) => p.animal))].sort(), [visible])
+  const cameraOptions = useMemo(() => [...new Set(visible.map((p) => p.camera))].sort(), [visible])
 
   // Top named species for the "Common Species Found" avatar cluster.
   const topSpecies = useMemo(() => {
     const counts = new Map()
-    for (const p of photos) if (p.animal !== 'Unknown') counts.set(p.animal, (counts.get(p.animal) || 0) + 1)
+    for (const p of visible) if (p.animal !== 'Unknown') counts.set(p.animal, (counts.get(p.animal) || 0) + 1)
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name]) => name)
-  }, [photos])
+  }, [visible])
 
   const displayed = useMemo(() => {
     // Home = every event from the last 24 hours; Library = the full archive.
-    const base = mode === 'home' ? photos.filter((p) => Date.now() - p.date.getTime() <= DAY_MS) : photos
+    const base = mode === 'home' ? visible.filter((p) => Date.now() - p.date.getTime() <= DAY_MS) : visible
     const sorted = [...base]
     if (sortMode === 'newest') sorted.sort((a, b) => b.date - a.date)
     else if (sortMode === 'oldest') sorted.sort((a, b) => a.date - b.date)
@@ -62,7 +66,7 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
       if (to && p.date > to) return false
       return true
     })
-  }, [photos, mode, sortMode, searchQuery, animalSel, cameraSel, dateFrom, dateTo])
+  }, [visible, mode, sortMode, searchQuery, animalSel, cameraSel, dateFrom, dateTo])
 
   const groups = useMemo(() => computeGroups(displayed), [displayed])
 
