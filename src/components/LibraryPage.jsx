@@ -276,9 +276,9 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
               </div>
             </div>
             <div>
-              <label className={fieldLabel}>Animal</label>
+              <label className={fieldLabel}>Type</label>
               <select className={selectCls} value={animalSel} onChange={(e) => setAnimalSel(e.target.value)}>
-                <option value="">All Animals</option>
+                <option value="">All</option>
                 {animalOptions.map((a) => (
                   <option key={a} value={a}>{a}</option>
                 ))}
