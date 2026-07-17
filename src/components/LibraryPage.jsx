@@ -23,6 +23,9 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
   const [showBoxes, setShowBoxes] = useState(true)
   const [openId, setOpenId] = useState(null)
   const [rotVersion, setRotVersion] = useState(0)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selected, setSelected] = useState(() => new Set())
+  const lastIdxRef = useRef(null)
   const deepLinkDone = useRef(false)
 
   // What this viewer may see: signed-out (non-Louie-Labs) visitors get animals
@@ -69,6 +72,56 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
   }, [visible, mode, sortMode, searchQuery, animalSel, cameraSel, dateFrom, dateTo])
 
   const groups = useMemo(() => computeGroups(displayed), [displayed])
+
+  // ── Selection (Google-Photos style; deletion is intentionally not wired yet) ──
+  const groupFaceIds = useMemo(
+    () => groups.map((g) => displayed[groupFaceIndex(displayed, g)]?.id),
+    [groups, displayed],
+  )
+  const allSelected = selected.size > 0 && selected.size === groupFaceIds.length
+  const exitSelection = () => {
+    setSelectionMode(false)
+    setSelected(new Set())
+    lastIdxRef.current = null
+  }
+  const toggleSelect = (index, shiftKey) => {
+    setSelectionMode(true)
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (shiftKey && lastIdxRef.current != null) {
+        // Range-select from the last-clicked card to this one.
+        const [a, b] = [lastIdxRef.current, index].sort((x, y) => x - y)
+        for (let i = a; i <= b; i++) if (groupFaceIds[i] != null) next.add(groupFaceIds[i])
+      } else {
+        const id = groupFaceIds[index]
+        next.has(id) ? next.delete(id) : next.add(id)
+      }
+      if (next.size === 0) setSelectionMode(false)
+      return next
+    })
+    lastIdxRef.current = index
+  }
+  const toggleSelectAll = () => {
+    if (allSelected) exitSelection()
+    else {
+      setSelected(new Set(groupFaceIds.filter((id) => id != null)))
+      setSelectionMode(true)
+    }
+  }
+
+  // Escape exits selection mode.
+  useEffect(() => {
+    if (!selectionMode) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setSelectionMode(false)
+        setSelected(new Set())
+        lastIdxRef.current = null
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectionMode])
 
   // Home shows the FULL last-24h window, but the API only returns 100 photos per
   // page — so keep paging in older photos until the oldest loaded capture is
@@ -134,6 +187,29 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
 
   return (
     <>
+      {/* Selection bar (Google-Photos style). Deletion will live here later,
+          gated to signed-in Louie Labs admins. */}
+      {selectionMode && (
+        <div className="sticky top-0 z-30 -mt-2 mb-6 py-2.5 px-4 bg-surface/95 backdrop-blur border border-border rounded-xl shadow-sm flex items-center gap-3">
+          <button
+            onClick={exitSelection}
+            title="Exit selection (Esc)"
+            className="p-1 rounded-lg hover:bg-surface-container text-on-surface flex items-center"
+          >
+            <Icon name="close" />
+          </button>
+          <span className="font-medium text-on-surface">{selected.size} selected</span>
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              onClick={toggleSelectAll}
+              className="px-3 py-1.5 rounded-lg text-button-text font-button-text text-primary hover:bg-green-faint transition-colors"
+            >
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Notification pill */}
       {newCount > 0 && (
         <div className="flex justify-center mb-8">
@@ -269,7 +345,7 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter-grid">
-          {groups.map((g) => {
+          {groups.map((g, i) => {
             const faceIdx = groupFaceIndex(displayed, g)
             const p = displayed[faceIdx]
             return (
@@ -281,6 +357,10 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
                 showBoxes={showBoxes}
                 rotVersion={rotVersion}
                 onOpen={() => setOpenId(p.id)}
+                selectable
+                selectionMode={selectionMode}
+                selected={selected.has(p.id)}
+                onToggleSelect={(shiftKey) => toggleSelect(i, shiftKey)}
               />
             )
           })}
