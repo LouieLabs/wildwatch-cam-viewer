@@ -85,12 +85,15 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
     lastIdxRef.current = null
   }
   const toggleSelect = (index, shiftKey) => {
+    // Capture the anchor BEFORE the (deferred) state updater runs — otherwise
+    // the ref below is already reassigned by the time the range is computed.
+    const anchor = lastIdxRef.current
     setSelectionMode(true)
     setSelected((prev) => {
       const next = new Set(prev)
-      if (shiftKey && lastIdxRef.current != null) {
-        // Range-select from the last-clicked card to this one.
-        const [a, b] = [lastIdxRef.current, index].sort((x, y) => x - y)
+      if (shiftKey && anchor != null) {
+        // Range-select every stack from the anchor card to this one.
+        const [a, b] = [anchor, index].sort((x, y) => x - y)
         for (let i = a; i <= b; i++) if (groupFaceIds[i] != null) next.add(groupFaceIds[i])
       } else {
         const id = groupFaceIds[index]
