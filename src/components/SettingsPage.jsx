@@ -8,6 +8,7 @@ import {
   isEnabledPref, disable, requestEnable, toggleWanted, addCustom, removeCustom,
   buildChips, searchSpecies,
 } from '../lib/notifications'
+import { DELETION_WINDOW_DAYS } from '../lib/deletion'
 import { useToast } from '../context/ToastContext'
 import { Icon } from './AppShell'
 
@@ -16,7 +17,15 @@ const online = (lastUpdate) => !!lastUpdate && Date.now() - lastUpdate < 3 * 60 
 // Settings — Account, Detection Notifications, Cameras, Wi-Fi, and Public
 // Gallery Curation. Matches the Stitch Settings mockup; all logic ported from
 // the original app.
-export default function SettingsPage({ captures, user, signedIn, onAuth, onAddCamera }) {
+export default function SettingsPage({
+  captures,
+  user,
+  signedIn,
+  onAuth,
+  onAddCamera,
+  deletionMode,
+  onToggleDeletionMode,
+}) {
   const toast = useToast()
   const [, setBump] = useState(0)
   const bump = () => setBump((n) => n + 1)
@@ -337,6 +346,33 @@ export default function SettingsPage({ captures, user, signedIn, onAuth, onAddCa
           </div>
         )}
       </section>
+
+      {/* Deletion (signed-in only) */}
+      {signedIn && (
+        <section className="mb-12">
+          <div className={heading}>
+            <Icon name="delete" className="text-primary" />
+            <h3 className="font-headline-md text-headline-md text-on-surface">Deletion</h3>
+          </div>
+          <div className={card + ' flex items-center justify-between gap-4'}>
+            <div>
+              <p className="text-on-surface font-medium">Deletion mode</p>
+              <p className="text-text-secondary font-body-md">
+                Turns on selecting stacks in the gallery and moving them to <strong>Recently Deleted</strong>. Deleted
+                items are hidden from every view (find them via the <em>Recently Deleted</em> filter), stay recoverable
+                for {DELETION_WINDOW_DAYS} days, then are permanently removed.
+              </p>
+            </div>
+            <button
+              onClick={onToggleDeletionMode}
+              aria-pressed={deletionMode}
+              className={'shrink-0 w-11 h-6 rounded-full relative transition-colors ' + (deletionMode ? 'bg-primary' : 'bg-surface-container-highest')}
+            >
+              <span className={'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ' + (deletionMode ? 'left-[22px]' : 'left-0.5')} />
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Public Gallery Curation */}
       <section className="mb-20">

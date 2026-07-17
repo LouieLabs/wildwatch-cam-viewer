@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { computeGroups, groupFaceIndex, colorFor, isDetection } from '../lib/photos'
+import { isRecentlyDeleted, markDeleted, restore, daysSinceDeleted } from '../lib/deletion'
 import { useToast } from '../context/ToastContext'
 import { Icon } from './AppShell'
 import PhotoCard from './PhotoCard'
 import Lightbox from './Lightbox'
 
 const DAY_MS = 24 * 60 * 60 * 1000
+const RECENTLY_DELETED = '__recently_deleted__' // sentinel Type-filter value
 
 // Home (mode="home", last 24 hours) and Library (mode="library", full archive),
 // laid out to match the Stitch "Detections" mockup.
-export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAddCamera }) {
+export default function LibraryPage({ mode, captures, signedIn, deletionMode, onNavigate, onAddCamera }) {
   const { photos, hasMore, loadingMore, loadMore, newCount, dismissNew, error, patchPhoto } =
     captures
   const toast = useToast()
@@ -23,6 +25,12 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
   const [showBoxes, setShowBoxes] = useState(true)
   const [openId, setOpenId] = useState(null)
   const [rotVersion, setRotVersion] = useState(0)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selected, setSelected] = useState(() => new Set())
+  const lastIdxRef = useRef(null)
+  const [deletedVersion, setDeletedVersion] = useState(0) // bump to re-filter after delete/restore
+
+  const viewingDeleted = deletionMode && animalSel === RECENTLY_DELETED
   const deepLinkDone = useRef(false)
 
   // What this viewer may see: signed-out (non-Louie-Labs) visitors get animals
@@ -40,8 +48,15 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
   }, [visible])
 
   const displayed = useMemo(() => {
-    // Home = every event from the last 24 hours; Library = the full archive.
-    const base = mode === 'home' ? visible.filter((p) => Date.now() - p.date.getTime() <= DAY_MS) : visible
+    // "Recently Deleted" is an archive-wide view of soft-deleted items; every
+    // other view hides them. Home = last 24 hours; Library = the full archive.
+    let base
+    if (viewingDeleted) {
+      base = visible.filter((p) => isRecentlyDeleted(p.id))
+    } else {
+      const inWindow = mode === 'home' ? visible.filter((p) => Date.now() - p.date.getTime() <= DAY_MS) : visible
+      base = inWindow.filter((p) => !isRecentlyDeleted(p.id))
+    }
     const sorted = [...base]
     if (sortMode === 'newest') sorted.sort((a, b) => b.date - a.date)
     else if (sortMode === 'oldest') sorted.sort((a, b) => a.date - b.date)
@@ -60,15 +75,93 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
           p.notes.toLowerCase().includes(q)
         if (!hit) return false
       }
-      if (animalSel && p.animal !== animalSel) return false
+      if (!viewingDeleted && animalSel && animalSel !== RECENTLY_DELETED && p.animal !== animalSel) return false
       if (cameraSel && p.camera !== cameraSel) return false
       if (from && p.date < from) return false
       if (to && p.date > to) return false
       return true
     })
-  }, [visible, mode, sortMode, searchQuery, animalSel, cameraSel, dateFrom, dateTo])
+  }, [visible, mode, sortMode, searchQuery, animalSel, cameraSel, dateFrom, dateTo, viewingDeleted, deletedVersion])
 
   const groups = useMemo(() => computeGroups(displayed), [displayed])
+
+  // ── Selection (Google-Photos style; deletion is intentionally not wired yet) ──
+  const groupFaceIds = useMemo(
+    () => groups.map((g) => displayed[groupFaceIndex(displayed, g)]?.id),
+    [groups, displayed],
+  )
+  const allSelected = selected.size > 0 && selected.size === groupFaceIds.length
+  const exitSelection = () => {
+    setSelectionMode(false)
+    setSelected(new Set())
+    lastIdxRef.current = null
+  }
+  const toggleSelect = (index, shiftKey) => {
+    // Capture the anchor BEFORE the (deferred) state updater runs — otherwise
+    // the ref below is already reassigned by the time the range is computed.
+    const anchor = lastIdxRef.current
+    setSelectionMode(true)
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (shiftKey && anchor != null) {
+        // Range-select every stack from the anchor card to this one.
+        const [a, b] = [anchor, index].sort((x, y) => x - y)
+        for (let i = a; i <= b; i++) if (groupFaceIds[i] != null) next.add(groupFaceIds[i])
+      } else {
+        const id = groupFaceIds[index]
+        next.has(id) ? next.delete(id) : next.add(id)
+      }
+      if (next.size === 0) setSelectionMode(false)
+      return next
+    })
+    lastIdxRef.current = index
+  }
+  const toggleSelectAll = () => {
+    if (allSelected) exitSelection()
+    else {
+      setSelected(new Set(groupFaceIds.filter((id) => id != null)))
+      setSelectionMode(true)
+    }
+  }
+
+  // Every photo id across the selected stacks (a stack = a burst group).
+  const collectSelectedPhotoIds = () => {
+    const ids = []
+    groups.forEach((g, i) => {
+      if (selected.has(groupFaceIds[i])) {
+        for (let j = g.start; j < g.start + g.len; j++) ids.push(displayed[j].id)
+      }
+    })
+    return ids
+  }
+  const deleteSelected = () => {
+    const count = selected.size
+    markDeleted(collectSelectedPhotoIds())
+    exitSelection()
+    setDeletedVersion((v) => v + 1)
+    toast(`${count} ${count === 1 ? 'event' : 'events'} moved to Recently Deleted`)
+  }
+  const restoreSelected = () => {
+    const count = selected.size
+    restore(collectSelectedPhotoIds())
+    exitSelection()
+    setDeletedVersion((v) => v + 1)
+    toast(`${count} ${count === 1 ? 'event' : 'events'} restored`)
+  }
+
+  // Escape exits selection mode.
+  useEffect(() => {
+    if (!selectionMode) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setSelectionMode(false)
+        setSelected(new Set())
+        lastIdxRef.current = null
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectionMode])
 
   // Home shows the FULL last-24h window, but the API only returns 100 photos per
   // page — so keep paging in older photos until the oldest loaded capture is
@@ -134,6 +227,44 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
 
   return (
     <>
+      {/* Selection bar (Google-Photos style). */}
+      {selectionMode && (
+        <div className="sticky top-0 z-30 -mt-2 mb-6 py-2.5 px-4 bg-surface/95 backdrop-blur border border-border rounded-xl shadow-sm flex items-center gap-3">
+          <button
+            onClick={exitSelection}
+            title="Exit selection (Esc)"
+            className="p-1 rounded-lg hover:bg-surface-container text-on-surface flex items-center"
+          >
+            <Icon name="close" />
+          </button>
+          <span className="font-medium text-on-surface">{selected.size} selected</span>
+          <div className="ml-auto flex items-center gap-2">
+            {viewingDeleted ? (
+              <button
+                onClick={restoreSelected}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-button-text font-button-text text-primary hover:bg-green-faint transition-colors"
+              >
+                <Icon name="restore_from_trash" size="18px" /> Restore
+              </button>
+            ) : (
+              <button
+                onClick={deleteSelected}
+                title="Move to Recently Deleted"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-button-text font-button-text text-error hover:bg-error-container transition-colors"
+              >
+                <Icon name="delete" size="18px" /> Delete
+              </button>
+            )}
+            <button
+              onClick={toggleSelectAll}
+              className="px-3 py-1.5 rounded-lg text-button-text font-button-text text-primary hover:bg-green-faint transition-colors"
+            >
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Notification pill */}
       {newCount > 0 && (
         <div className="flex justify-center mb-8">
@@ -197,12 +328,13 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
               </div>
             </div>
             <div>
-              <label className={fieldLabel}>Animal</label>
+              <label className={fieldLabel}>Type</label>
               <select className={selectCls} value={animalSel} onChange={(e) => setAnimalSel(e.target.value)}>
-                <option value="">All Animals</option>
+                <option value="">All</option>
                 {animalOptions.map((a) => (
                   <option key={a} value={a}>{a}</option>
                 ))}
+                {deletionMode && <option value={RECENTLY_DELETED}>Recently Deleted</option>}
               </select>
             </div>
             <div>
@@ -269,7 +401,7 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter-grid">
-          {groups.map((g) => {
+          {groups.map((g, i) => {
             const faceIdx = groupFaceIndex(displayed, g)
             const p = displayed[faceIdx]
             return (
@@ -281,6 +413,11 @@ export default function LibraryPage({ mode, captures, signedIn, onNavigate, onAd
                 showBoxes={showBoxes}
                 rotVersion={rotVersion}
                 onOpen={() => setOpenId(p.id)}
+                selectable={deletionMode}
+                selectionMode={selectionMode}
+                selected={selected.has(p.id)}
+                onToggleSelect={(shiftKey) => toggleSelect(i, shiftKey)}
+                deletedDaysAgo={viewingDeleted ? daysSinceDeleted(p.id) : null}
               />
             )
           })}
