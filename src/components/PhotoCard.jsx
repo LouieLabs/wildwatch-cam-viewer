@@ -21,6 +21,7 @@ export default function PhotoCard({
   selectionMode = false,
   selected = false,
   onToggleSelect,
+  deletedDaysAgo = null,
 }) {
   const imgRef = useRef(null)
   const canvasRef = useRef(null)
@@ -82,13 +83,21 @@ export default function PhotoCard({
         {/* Selection tint */}
         {selected && <div className="absolute inset-0 bg-primary/25 pointer-events-none z-10" />}
 
+        {/* "Deleted __ days ago" banner (Recently Deleted view) */}
+        {deletedDaysAgo != null && (
+          <div className="absolute top-0 left-0 w-full z-30 bg-error/90 text-white text-[11px] font-semibold py-1 flex items-center justify-center gap-1">
+            <Icon name="delete" size="14px" />
+            Deleted {deletedDaysAgo === 0 ? 'today' : `${deletedDaysAgo} day${deletedDaysAgo === 1 ? '' : 's'} ago`}
+          </div>
+        )}
+
         {/* Selection checkbox (top-left) */}
         {selectable && (
           <button
             onClick={toggle}
             title={selected ? 'Deselect' : 'Select'}
             className={
-              'absolute top-2 left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center transition-all ' +
+              'absolute top-2 left-2 z-40 w-6 h-6 rounded-full flex items-center justify-center transition-all ' +
               (selected
                 ? 'bg-primary text-white opacity-100 scale-100'
                 : 'bg-black/30 backdrop-blur-sm border-2 border-white/90 text-transparent hover:bg-black/50 ' +
